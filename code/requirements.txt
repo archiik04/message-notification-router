@@ -1,0 +1,17 @@
+# Core pipeline (required)
+numpy>=1.26
+pillow>=10.0
+opencv-python-headless>=4.9
+pytesseract>=0.3.10          # needs the tesseract binary on PATH (see README)
+faster-whisper>=1.0          # local speech-to-text, no API key
+sentence-transformers>=3.0   # history embeddings + CLIP scene tagging
+
+# Robustness: the dataset ships an AVIF file named .jpg
+pillow-avif-plugin>=1.4
+
+# Optional: enables the LLM arbitration layer when OPENAI_API_KEY is set.
+# The pipeline runs fully without it.
+openai>=1.40
+
+# Tests
+pytest>=8.0
