@@ -156,6 +156,74 @@ def cmd_media(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_verify(args: argparse.Namespace) -> int:
+    """End-to-end submission readiness check.
+
+    Runs the pipeline cold, validates the output contract, scores the labelled
+    samples, and confirms no message id is hardcoded into the decision path.
+    Prints a PASS/FAIL checklist so the whole submission can be verified with
+    one command.
+    """
+    import re
+
+    settings = build_settings(args)
+    checks: list[tuple[str, bool, str]] = []
+
+    dataset = load_dataset(settings)
+    checks.append(("dataset loads", bool(dataset.messages), f"{len(dataset.messages)} messages"))
+
+    media = build_media_index(settings, dataset)
+    referenced = {m.media_id for m in dataset.messages if m.has_media}
+    resolved = set(media.images) | set(media.voices)
+    checks.append(("all referenced media resolves", referenced <= resolved,
+                   f"{len(referenced & resolved)}/{len(referenced)} resolved"))
+
+    router = NotificationRouter(settings, dataset, media)
+    decisions, stats, critic = router.run()
+    checks.append(("one decision per message", len(decisions) == len(dataset.messages),
+                   f"{len(decisions)} decisions"))
+    checks.append(("self-critic found no violations", critic.repaired == 0,
+                   f"{critic.repaired} repaired"))
+
+    out_path = Path(args.output).resolve() if args.output else settings.dataset_dir / "output.csv"
+    write_output(out_path, decisions)
+    report = validate_output(out_path, [m.message_id for m in dataset.messages])
+    checks.append(("output.csv matches the required contract", report.ok,
+                   "; ".join(report.errors) or str(out_path.name)))
+
+    if dataset.samples:
+        sample_decisions, _, _ = router.run(list(dataset.samples))
+        r = evaluate(sample_decisions, dataset.samples)
+        checks.append(("labelled-sample action accuracy >= 90%", r.action_accuracy >= 0.90,
+                       f"{r.action_accuracy:.1%}"))
+        checks.append(("labelled-sample type accuracy >= 90%", r.type_accuracy >= 0.90,
+                       f"{r.type_accuracy:.1%}"))
+        checks.append(("no safety-critical errors", r.critical_error_count == 0,
+                       f"{r.critical_error_count} errors"))
+        checks.append(("confidence tracks the reference", r.mean_confidence_error <= 0.05,
+                       f"mean abs error {r.mean_confidence_error:.3f}"))
+
+    # No message-specific answers may live in the decision path.
+    id_pattern = re.compile(r"\b(?:msg_\d+|sample_msg_\d+|message_\d{3,})\b")
+    offenders = []
+    for path in sorted((Path(__file__).parent / "router").glob("*.py")):
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if id_pattern.search(line):
+                offenders.append(f"{path.name}:{lineno}")
+    checks.append(("no hardcoded message ids in decision path", not offenders,
+                   ", ".join(offenders) or "clean"))
+
+    width = max(len(name) for name, _, _ in checks)
+    print()
+    for name, passed, detail in checks:
+        print(f"  [{'PASS' if passed else 'FAIL'}]  {name:<{width}}  {detail}")
+    failed = [name for name, passed, _ in checks if not passed]
+    print(f"\n{len(checks) - len(failed)}/{len(checks)} checks passed"
+          f"{'' if not failed else '  FAILED: ' + ', '.join(failed)}")
+    print(f"predictions written to {out_path}")
+    return 0 if not failed else 1
+
+
 def cmd_ablate(args: argparse.Namespace) -> int:
     """Measure each component's contribution by disabling it in isolation."""
     base = build_settings(args)
@@ -227,6 +295,10 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("media", help="rebuild and dump the media cache").set_defaults(func=cmd_media)
     sub.add_parser("ablate", help="component ablation study").set_defaults(func=cmd_ablate)
+
+    p_verify = sub.add_parser("verify", help="end-to-end submission readiness check")
+    p_verify.add_argument("-o", "--output", help="output CSV path")
+    p_verify.set_defaults(func=cmd_verify)
 
     args = parser.parse_args(argv)
     setup_logging(args.verbose)
