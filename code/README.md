@@ -59,7 +59,8 @@ python code/main.py eval                # score against the labelled samples
 python code/main.py explain msg_095     # full decision trace for one message
 python code/main.py media               # rebuild and dump the OCR/ASR cache
 python code/main.py ablate              # component ablation study
-python -m pytest code/tests -q          # 26 regression + adversarial tests
+python code/main.py verify              # one-command submission readiness check
+python -m pytest code/tests -q          # 45 regression + adversarial tests
 ```
 
 ### Optional LLM layer — built, measured, and deliberately left off
@@ -99,7 +100,8 @@ Reverse-engineering the 30 solved rows surfaced structure that is easy to miss:
    named, auditable key rather than to an opaque sentence.
 2. **Confidence is stratified by action** — notify 0.85–0.91, digest 0.78–0.84, mute 0.81–0.87, with
    identical rationales repeating identical values. Confidence is therefore a property of
-   (decision, rationale), nudged only slightly by decision margin. Mean error: **0.016**.
+   (decision, rationale), nudged only slightly by decision margin. Mean error: **0.010**,
+   with all 30 reasons matching the reference verbatim.
 3. **Evidence must be behaviourally consistent.** Cited history is always the same user and
    counterparty, and its recorded outcome agrees with the decision — `notify` evidence was opened and
    replied to, behavioural `mute` evidence was dismissed or muted.
