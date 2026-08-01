@@ -23,6 +23,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from router.config import DEFAULT_SETTINGS, Settings  # noqa: E402
 from router.dataio import load_dataset, validate_output, write_output  # noqa: E402
 from router.evaluate import calibration_report, evaluate  # noqa: E402
+from router.metrics import StageTimer  # noqa: E402
+from router.metrics import collect as collect_metrics  # noqa: E402
 from router.multimodal import build_media_index  # noqa: E402
 from router.pipeline import NotificationRouter  # noqa: E402
 
@@ -58,9 +60,24 @@ def _router(settings: Settings):
 
 def cmd_run(args: argparse.Namespace) -> int:
     settings = build_settings(args)
-    dataset, router = _router(settings)
+    timer = StageTimer()
 
+    timer.start("load_dataset")
+    dataset = load_dataset(settings)
+    timer.stop("load_dataset")
+
+    timer.start("media_understanding")
+    media = build_media_index(settings, dataset)
+    timer.stop("media_understanding")
+
+    timer.start("build_router")
+    router = NotificationRouter(settings, dataset, media)
+    timer.stop("build_router")
+
+    timer.start("routing")
     decisions, stats, critic = router.run()
+    timer.stop("routing")
+
     print(stats.render())
     print(critic.render())
 
@@ -70,6 +87,12 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     report = validate_output(out_path, [m.message_id for m in dataset.messages])
     print(report.render())
+
+    metrics = collect_metrics(decisions, stats, critic, media, dataset, timer)
+    metrics_path = metrics.write(settings.artifact_dir / "run_metrics.json")
+    print()
+    print(metrics.render())
+    log.info("wrote operational metrics to %s", metrics_path)
 
     if args.trace:
         trace_path = settings.artifact_dir / "decision_traces.jsonl"

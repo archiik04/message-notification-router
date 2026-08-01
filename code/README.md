@@ -15,7 +15,9 @@ with an independent safety engine that can veto any decision.
 | reason exact match vs reference | **30/30** |
 | evidence recall | 71% (measured ceiling, see below) |
 | mean absolute confidence error | 0.010 |
-| runtime, 110 messages | ~2.5 s (warm media cache) |
+| internal-consistency anomalies | **0 / 110** |
+| tests | **60 passing** |
+| runtime, 110 messages | ~3.8 s (warm media cache), ~29 msg/s |
 
 ---
 
@@ -60,7 +62,8 @@ python code/main.py explain msg_095     # full decision trace for one message
 python code/main.py media               # rebuild and dump the OCR/ASR cache
 python code/main.py ablate              # component ablation study
 python code/main.py verify              # one-command submission readiness check
-python -m pytest code/tests -q          # 45 regression + adversarial tests
+python -m pytest code/tests -q          # 60 regression, adversarial + grounding tests
+python -m pytest code/tests/test_grounding.py -q   # proof the media is actually read
 ```
 
 ### Optional LLM layer — built, measured, and deliberately left off
@@ -348,6 +351,35 @@ evidence must not contradict its decision.
   capability while the rest of the pipeline continues.
 - **Auditable** — `--trace` emits every signal, driver, threat and evidence score per decision;
   `explain <id>` reconstructs one decision end to end.
+
+## Speed, cost, and repeatability
+
+Every run writes `code/artifacts/run_metrics.json` with latency per stage, throughput,
+cache hit rate, media coverage, safety interventions and critic repairs.
+
+| | |
+|---|---|
+| 110 messages, warm cache | ~3.8 s (~29 msg/s) |
+| cold cache (first run) | ~30 s extra, one-off Whisper transcription of 13 voice notes |
+| inference cost | **$0** — no network calls, no API key |
+| determinism | asserted by test: same input, identical output |
+
+The only paid path is the optional LLM layer, which is off by default and measured as
+a net negative anyway (see above). With it enabled the whole run costs roughly $0.01.
+
+## Grounding: proof the system reads the media
+
+A multimodal router can score well while being quietly blind — if every image carries a
+descriptive caption, a text-only system looks identical to one doing real OCR.
+`code/tests/test_grounding.py` closes that hole:
+
+- OCR recovers **100+ tokens absent from the captions**
+- named documents yield their own vocabulary (the school form yields *consent*/*trip*,
+  the bank statement yields *hdfc*/*account*)
+- all 13 voice notes transcribe, and speaking rate separates the urgent call (262 wpm)
+  from the calm one (131 wpm)
+- an OTP scam delivered **only as audio** is still muted as `scam`
+- blinding the pipeline provably changes real decisions
 
 ## Limitations and future work
 
