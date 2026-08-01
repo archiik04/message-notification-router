@@ -41,6 +41,8 @@ ACCOUNT_THREAT_TERMS = (
     "account closure", "avoid account closure", "account may get locked", "account check",
     "pending verification", "complete verification", "unless you login", "login now",
     "account lock", "avoid account lock", "service reactivation", "reactivation",
+    "sim blocked", "sim will be blocked", "number blocked", "connection blocked",
+    "card blocked", "will be barred", "access blocked", "be blocked",
     "approval window closes", "window closes today",
 )
 
@@ -49,7 +51,8 @@ ACCOUNT_THREAT_TERMS = (
 WINDFALL_TERMS = (
     "loan approved", "amount will be released", "credit approved", "sanctioned",
     "you are approved", "claim approved", "payout approved", "funds are ready",
-    "you have been selected", "pre-approved",
+    "you have been selected", "you are selected", "selected for the role",
+    "pre-approved", "your claim is approved", "eligible to receive",
 )
 
 PAYMENT_DEMAND_TERMS = (
@@ -65,6 +68,12 @@ PAYMENT_DEMAND_TERMS = (
 
 # A QR named in text is a payment instrument even when no image is attached, and
 # "scan and send me the screenshot" is the classic peer-to-peer payment fraud.
+PAY_AMOUNT_RE = re.compile(
+    r"\b(pay|send|transfer|deposit|remit)\b[^.!?;\n]{0,25}?"
+    r"(?:rs\.?|inr|₹|\$)?\s?\d{2,}(?:[,.]\d+)*",
+    re.I,
+)
+
 QR_PAYMENT_RE = re.compile(
     r"\b(scan|scanning)\b[^.!?;\n]{0,40}?\b(qr|code|barcode)\b|\bqr\b[^.!?;\n]{0,30}?\b(pay|payment|send)\b",
     re.I,
@@ -120,6 +129,20 @@ ADVISORY_TERMS = (
     "get bowled by scammers", "how to stay safe",
 )
 
+# Romanised Hindi appears throughout Indian WhatsApp traffic. Without these
+# a Hinglish scam that avoids English keywords scores zero.
+TRANSLITERATED_RISK_TERMS = (
+    "khata band", "khata block", "account band", "band ho jayega", "block ho jayega",
+    "paisa bhejo", "paise bhejo", "turant bhejo", "abhi bhejo", "jaldi karo",
+    "otp batao", "otp bhejo", "code batao", "link kholo", "link open karo",
+    "verify karo", "payment karo", "transfer karo", "raqam", "jaldi",
+)
+
+TRANSLITERATED_URGENCY_TERMS = (
+    "abhi", "turant", "jaldi", "foran", "emergency hai", "hospital mein",
+    "call karo", "phone karo", "aajao", "aa jao",
+)
+
 PRIZE_TERMS = (
     "you have won", "congratulations you", "lucky winner", "lottery", "prize money",
     "claim your reward", "cash prize", "selected winner", "gift card worth", "free iphone",
@@ -150,7 +173,7 @@ INJECTION_PATTERNS = (
     r"new\s+instructions?\s*:",
     # Structured-field spoofing: content that imitates the engine's own
     # variables to smuggle a decision in ("action=notify", "confidence=1").
-    r"\b(?:action|confidence|user_priority|verified_business|sender_risk)\s*[=:]\s*\w",
+    r"[\"\']?\b(?:action|confidence|user_priority|verified_business|sender_risk)\b[\"\']?\s*[=:]\s*[\"\']?\w",
     r"internal\s+(?:router|system|engine)\s+metadata",
     r"(?:assistant|system|model)\s+instruction",
     r"routing\s+override",
@@ -168,6 +191,7 @@ URGENCY_TERMS = (
 
 TIME_PRESSURE_RE = re.compile(
     r"\b(today|tonight|this (?:morning|afternoon|evening)|tomorrow|now(?!\s+that)"
+    r"|within (?:the )?next \d+ ?(?:min|minutes|hours?|hrs?)|in (?:the )?next \d+ ?(?:min|minutes|hours?|hrs?)"
     r"|within \d+ ?(?:min|minutes|hours?|hrs?)|by \d{1,2}(?::\d{2})? ?(?:am|pm)?|before \d{1,2}(?::\d{2})?"
     r"|\d{1,2}:\d{2} ?(?:am|pm)?|next \d+ ?(?:min|minutes|hours?)|in the next"
     r"|(?:next |this )?(?:mon|tues|wednes|thurs|fri|satur|sun)day|next week|this weekend)\b",
@@ -274,10 +298,42 @@ SUSPICIOUS_TLDS = (".xyz", ".top", ".click", ".link", ".buzz", ".icu", ".rest", 
 URL_SHORTENERS = ("bit.ly", "tinyurl", "t.co", "rb.gy", "cutt.ly", "is.gd", "shorturl", "rebrand.ly")
 
 
+def normalize_keep_spacing(text: str) -> str:
+    """NFKC + control-character strip, but WITHOUT collapsing runs of spaces.
+
+    Wider gaps are the only thing separating one obfuscated word from the next
+    ("O T P  n o w"), so the matching view must see them.
+    """
+    text = unicodedata.normalize("NFKC", text or "")
+    text = text.replace("​", "").replace(" ", " ")
+    return re.sub(r"[​-‏‪-‮⁦-⁩]", "", text).strip()
+
+
 def normalize(text: str) -> str:
     text = unicodedata.normalize("NFKC", text or "")
     text = text.replace("​", "").replace("\xa0", " ")
+    # Bidi overrides and zero-width joiners are used to disguise payloads.
+    text = re.sub(r"[​-‏‪-‮⁦-⁩]", "", text)
     return re.sub(r"[ \t]+", " ", text).strip()
+
+
+_LEET = str.maketrans({"0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "@": "a", "$": "s"})
+_SPACED_RE = re.compile(r"\b(?:[A-Za-z]\s){2,}[A-Za-z]\b")
+_INNER_DIGIT_RE = re.compile(r"(?<=[A-Za-z])[013457@$]+(?=[A-Za-z])|\b[013457@$]+(?=[A-Za-z]{2,})")
+
+
+def normalize_for_matching(text: str) -> str:
+    """A lexicon-facing view that survives cheap obfuscation.
+
+    Fraud text routinely evades keyword filters with substitutions ("0TP",
+    "acc0unt") and letter spacing ("S H A R E"). Matching against a normalised
+    copy defeats both without touching the text shown to a human. Digits are
+    only de-leeted when adjacent to letters, so "pay 499" and "4 PM" survive
+    intact.
+    """
+    lowered = text.lower()
+    collapsed = _SPACED_RE.sub(lambda m: m.group(0).replace(" ", ""), lowered)
+    return _INNER_DIGIT_RE.sub(lambda m: m.group(0).translate(_LEET), collapsed)
 
 
 _TERM_RE_CACHE: dict[str, re.Pattern] = {}
@@ -366,6 +422,9 @@ class ContentView:
     refund_bait_hits: list[str] = field(default_factory=list)
     commerce_hits: list[str] = field(default_factory=list)
     windfall_hits: list[str] = field(default_factory=list)
+    translit_risk_hits: list[str] = field(default_factory=list)
+    translit_urgency_hits: list[str] = field(default_factory=list)
+    demands_amount: bool = False
     feedback_hits: list[str] = field(default_factory=list)
     caption_marketplace_hits: list[str] = field(default_factory=list)
     caption_promo_hits: list[str] = field(default_factory=list)
@@ -427,7 +486,12 @@ def build_content(message: Message, media: MediaIndex) -> ContentView:
 
     cv.media_text = normalize(media_text)
     cv.combined = "\n".join(p for p in (cv.text, cv.media_text) if p).strip()
-    low = cv.combined.lower()
+    # Lexicons match against the de-obfuscated view; `low` stays the plain
+    # lowercase text for anything that needs the literal wording.
+    spaced_source = "\n".join(
+        p for p in (normalize_keep_spacing(message.message_text), cv.media_text) if p
+    )
+    low = normalize_for_matching(spaced_source)
     cv.low = low
     cv.char_count = len(cv.combined)
     cv.word_count = len(cv.combined.split())
@@ -456,6 +520,9 @@ def build_content(message: Message, media: MediaIndex) -> ContentView:
     cv.commerce_hits = count_hits(low, COMMERCE_TERMS)
     cv.windfall_hits = count_hits(low, WINDFALL_TERMS)
     cv.mentions_qr_payment = bool(QR_PAYMENT_RE.search(cv.combined))
+    cv.demands_amount = bool(PAY_AMOUNT_RE.search(cv.combined))
+    cv.translit_risk_hits = count_hits(low, TRANSLITERATED_RISK_TERMS)
+    cv.translit_urgency_hits = count_hits(low, TRANSLITERATED_URGENCY_TERMS)
     cv.feedback_hits = count_hits(low, FEEDBACK_REQUEST_TERMS)
     # Peer-selling is judged on what the sender actually wrote, not on OCR of an
     # attached poster: a university internship flyer contains plenty of

@@ -72,6 +72,7 @@ class RationaleContext:
     work_context: bool = False
     school_context: bool = False
     has_link: bool = False
+    local_language_urgency: bool = False
     support_framing: bool = False
     directed_at_user: bool = False
     injection: bool = False
@@ -147,6 +148,12 @@ BANK: tuple[Rationale, ...] = (
         "A service the user is currently using has changed status and needs checking now.",
         "notify", ("business_update", "event"), 0.87, 1, 70,
         lambda c: c.is_business and c.has_relationship,
+    ),
+    Rationale(
+        "local_language_urgent",
+        "The message carries a same-day deadline that the user needs to act on now.",
+        "notify", (), 0.85, 1, 62,
+        lambda c: c.local_language_urgency,
     ),
     Rationale(
         "time_critical_generic",

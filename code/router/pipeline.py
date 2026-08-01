@@ -148,6 +148,7 @@ class NotificationRouter:
         ctx.school_context = bool(group and group.group_type in SCHOOL_TYPES)
         ctx.has_relationship = bool(rel and rel.has_active_relationship)
         ctx.has_link = bool(content.urls)
+        ctx.local_language_urgency = bool(content.translit_urgency_hits)
         # A voice note is addressed to its recipient by nature; a text broadcast
         # to a group is not unless it names or asks something of them.
         ctx.directed_at_user = (

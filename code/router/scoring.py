@@ -76,10 +76,14 @@ class UrgencyEngine:
             urgency += min(0.34, 0.16 * explicit)
             drivers.append("explicit_urgency_language")
 
+        if content.translit_urgency_hits:
+            urgency += min(0.24, 0.12 * len(content.translit_urgency_hits))
+            drivers.append("transliterated_urgency")
+
         if content.time_pressure_hits:
             same_day = any(
                 h in ("today", "tonight", "now", "this morning", "this afternoon", "this evening")
-                or h.startswith(("in ", "within ", "by ", "before "))
+                or h.startswith(("in ", "within ", "by ", "before ", "next "))
                 for h in content.time_pressure_hits
             )
             urgency += 0.26 if same_day else 0.12
@@ -413,6 +417,11 @@ class RoutingEngine:
         priority -= w.promo_penalty * bundle.promo_pressure
         if bundle.quiet_hours:
             priority -= w.quiet_hours_penalty
+        if message.forwarded_count >= 8:
+            # Scales with how far the chain has travelled, capped so a genuine
+            # forwarded alert from a trusted admin can still surface.
+            priority -= w.forward_chain_penalty * min(1.0, message.forwarded_count / 20.0)
+            drivers.append("mass_forwarded_chain")
 
         bundle.priority = round(max(0.0, min(1.0, priority)), 4)
         bundle.drivers = drivers

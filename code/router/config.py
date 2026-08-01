@@ -89,6 +89,9 @@ class FusionWeights:
     repetition_penalty: float = 0.28
     promo_penalty: float = 0.22
     quiet_hours_penalty: float = 0.06
+    # Chain forwards: mass-forwarded content is low value almost by definition,
+    # and the count itself is the signal regardless of the wording.
+    forward_chain_penalty: float = 0.14
 
 
 @dataclass(frozen=True)

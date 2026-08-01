@@ -117,7 +117,7 @@ class SafetyEngine:
             v.signals["fake_support"] = 0.14
 
         # ---- Advance-fee / payment extraction --------------------------
-        if content.payment_demand_hits:
+        if content.payment_demand_hits or content.demands_amount:
             bump = 0.34
             if content.credential_hits or content.account_threat_hits:
                 bump += 0.14
@@ -129,6 +129,13 @@ class SafetyEngine:
             scam += bump
             threats.append("payment_demand")
             v.signals["payment_demand"] = bump
+
+        # ---- Romanised-Hindi fraud vocabulary ---------------------------
+        if content.translit_risk_hits:
+            bump = 0.34 + 0.12 * min(2, len(content.translit_risk_hits) - 1)
+            scam += bump
+            threats.append("transliterated_fraud_language")
+            v.signals["translit_risk"] = bump
 
         # ---- Refund bait -----------------------------------------------
         # An unprompted refund that asks the user to "verify" payment details is
@@ -143,11 +150,12 @@ class SafetyEngine:
 
         # ---- Prize bait and investment fraud ---------------------------
         if content.prize_hits:
-            scam += 0.42
+            # Nobody legitimately opens with "you have won 25 lakh".
+            scam += 0.62
             threats.append("prize_bait")
-            v.signals["prize"] = 0.42
+            v.signals["prize"] = 0.62
         if content.investment_hits:
-            bump = 0.34 + (0.10 if len(content.investment_hits) > 1 else 0.0)
+            bump = 0.58 + (0.12 if len(content.investment_hits) > 1 else 0.0)
             scam += bump
             threats.append("investment_fraud")
             v.signals["investment"] = bump
@@ -218,7 +226,9 @@ class SafetyEngine:
             threats.append("obscured_link_pressure")
 
         qr_present = content.has_qr or content.mentions_qr_payment
-        if qr_present and (content.payment_demand_hits or content.account_threat_hits):
+        if qr_present and (
+            content.payment_demand_hits or content.account_threat_hits or content.demands_amount
+        ):
             risk += 0.26
             threats.append("payment_qr_risk")
 
@@ -257,6 +267,19 @@ class SafetyEngine:
 
         if biz is not None and not biz.verified and biz.user_reports_30d >= 5:
             score += 0.10
+
+        # A domain built out of security vocabulary (verify / secure / kyc /
+        # login / alert) is bait regardless of whether we hold a business record
+        # for the sender - most impersonation has no record at all.
+        bait_domain = any(
+            re.search(r"(verify|secure|kyc|login|alert|otp|update|refund|reward)", d)
+            for d in content.domains
+        )
+        if bait_domain and (
+            content.credential_hits or content.account_threat_hits
+            or content.payment_demand_hits or content.demands_amount
+        ):
+            score += 0.45
 
         # Brand claimed in the body while the visible link is a lookalike host.
         claims_brand = any(b in content.low for b in KNOWN_BRAND_TOKENS)
@@ -312,4 +335,8 @@ class SafetyEngine:
         # Chain forwards of promotional material.
         if message.forwarded_count >= 3 and (content.promo_hits or content.forward_hits):
             score += 0.18
+        # A message forwarded this many times is chain content by definition,
+        # whatever it claims to be about.
+        if message.forwarded_count >= 12:
+            score += 0.22
         return round(min(1.0, score), 3)
