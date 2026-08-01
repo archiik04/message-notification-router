@@ -139,15 +139,46 @@ class NotificationRouter:
         ctx.direct_request = content.has_direct_request
         ctx.mentions_user = content.mentions_user(message.user_id)
         ctx.same_day_deadline = "same_day_deadline" in bundle.drivers
-        ctx.work_context = bool(group and group.group_type in WORK_TYPES)
+        # Work context follows the person, not the channel. A colleague pinging
+        # about a failing deployment is a work message whether it arrives in the
+        # team group or as a direct chat.
+        ctx.work_context = bool(group and group.group_type in WORK_TYPES) or self._shares_group_type(
+            message, WORK_TYPES
+        )
         ctx.school_context = bool(group and group.group_type in SCHOOL_TYPES)
+        ctx.has_relationship = bool(rel and rel.has_active_relationship)
+        ctx.has_link = bool(content.urls)
+        # A voice note is addressed to its recipient by nature; a text broadcast
+        # to a group is not unless it names or asks something of them.
+        ctx.directed_at_user = (
+            ctx.mentions_user or ctx.direct_request or content.modality == "voice"
+        )
+        ctx.support_framing = bool(content.impersonation_hits) or any(
+            k in content.low for k in ("support alert", "helpdesk", "support team", "customer care")
+        )
         ctx.injection = safety.injection_score >= 0.5
         ctx.credential_request = "credential_request" in safety.threats
         ctx.account_threat = "account_threat_pressure" in safety.threats
         ctx.payment_risk = "payment_demand" in safety.threats or "payment_qr_risk" in safety.threats
-        ctx.interest_match = bool(rel and rel.has_active_relationship and not ctx.opted_out)
+        # Interest is evidenced either by a live business relationship or by the
+        # user having consistently engaged with this sender's offers before.
+        ctx.interest_match = bool(rel and rel.has_active_relationship and not ctx.opted_out) or bool(
+            sender_stats and sender_stats.seen >= 2 and sender_stats.affinity >= 0.5
+        )
         ctx.forwarded_chain = message.forwarded_count >= 3
         return ctx
+
+    def _shares_group_type(self, message: Message, group_types: set[str]) -> bool:
+        """Does the sender share a group of this kind with the recipient?"""
+        if not message.sender_user_id:
+            return False
+        for (group_id, user_id), _ in self.ds.memberships.items():
+            if user_id != message.sender_user_id:
+                continue
+            group = self.ds.groups.get(group_id)
+            if group and group.group_type in group_types and self.ds.membership(group_id, message.user_id):
+                return True
+        return False
 
     def _evidence_for(self, message: Message, content: ContentView, action: str, rationale, mtype: str):
         """Retrieve citations that are coherent with the stated rationale.

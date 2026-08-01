@@ -60,6 +60,7 @@ class RationaleContext:
     opted_out: bool = False
     dismissed_similar: bool = False
     repeated_pattern: bool = False
+    has_relationship: bool = False
 
     trusted_sender: bool = False
     unknown_sender: bool = False
@@ -70,6 +71,9 @@ class RationaleContext:
     same_day_deadline: bool = False
     work_context: bool = False
     school_context: bool = False
+    has_link: bool = False
+    support_framing: bool = False
+    directed_at_user: bool = False
     injection: bool = False
     credential_request: bool = False
     account_threat: bool = False
@@ -150,11 +154,13 @@ BANK: tuple[Rationale, ...] = (
     ),
 
     # ---------------- digest ----------------
+    # A brand the user actually deals with reads differently from one they have
+    # no history with, even when both messages are equally harmless.
     Rationale(
         "verified_business_non_urgent",
         "A verified business is sending a legitimate but non-urgent update.",
         "digest", ("business_update", "payment"), 0.78, 1, 86,
-        lambda c: c.verified_business and not c.has_order_history,
+        lambda c: c.verified_business and c.has_relationship and not c.has_order_history,
     ),
     Rationale(
         "verified_business_legit",
@@ -189,6 +195,14 @@ BANK: tuple[Rationale, ...] = (
         "harmless_greeting",
         "The message is a harmless greeting that can be read later.",
         "digest", ("greeting",), 0.82, 1, 76,
+    ),
+    # Chatter broadcast to a group with no addressee is conversation; the same
+    # sender writing to you personally is an update meant for you.
+    Rationale(
+        "group_casual_chat",
+        "The message is safe casual chat with no urgent action required.",
+        "digest", ("personal", "greeting"), 0.80, 1, 75,
+        lambda c: c.is_group and not c.directed_at_user,
     ),
     Rationale(
         "trusted_no_action",
@@ -226,23 +240,41 @@ BANK: tuple[Rationale, ...] = (
         "mute", ("scam", "spam"), 0.85, 1, 99,
         lambda c: c.injection,
     ),
+    # These three fraud rationales are separated by *how* the message works on
+    # the reader, not by how dangerous it is. A link makes it a verification
+    # flow; explicit support framing makes it impersonation; neither, from a
+    # sender with no standing, makes it a cold approach.
+    Rationale(
+        "otp_verification_flow",
+        "The message asks for urgent OTP or account verification through a suspicious flow.",
+        "mute", ("scam",), 0.81, 1, 98,
+        lambda c: c.credential_request and c.has_link,
+    ),
     Rationale(
         "fake_support_pressure",
         "The message uses fake support language and account-blocking pressure to push the user into action.",
         "mute", ("scam",), 0.87, 1, 97,
-        lambda c: c.account_threat,
+        lambda c: c.account_threat and c.support_framing,
     ),
     Rationale(
         "first_contact_sensitive_ask",
         "This is the first message from the sender and it asks for sensitive verification or payment.",
         "mute", ("scam",), 0.87, 1, 96,
-        lambda c: c.first_contact and (c.credential_request or c.payment_risk),
+        lambda c: (c.credential_request or c.payment_risk)
+        and not c.support_framing
+        and not c.has_link,
         evidence_policy="none",
     ),
     Rationale(
-        "otp_verification_flow",
+        "fake_support_generic",
+        "The message uses fake support language and account-blocking pressure to push the user into action.",
+        "mute", ("scam",), 0.87, 1, 94,
+        lambda c: c.account_threat,
+    ),
+    Rationale(
+        "otp_verification_generic",
         "The message asks for urgent OTP or account verification through a suspicious flow.",
-        "mute", ("scam",), 0.81, 1, 95,
+        "mute", ("scam",), 0.81, 1, 93,
         lambda c: c.credential_request,
     ),
     Rationale(
@@ -262,11 +294,14 @@ BANK: tuple[Rationale, ...] = (
         "mute", ("greeting", "forward"), 0.84, 2, 90,
         lambda c: c.repeated_pattern or c.forwarded_chain,
     ),
+    # "Marketing messages" is a claim about a business relationship; a neighbour
+    # selling a jacket is not marketing, so peer offers fall through to the
+    # behavioural rationale below.
     Rationale(
         "marketing_opted_out",
         "The user has opted out of or repeatedly dismissed similar marketing messages.",
         "mute", ("promotion", "spam", "business_update"), 0.81, 2, 88,
-        lambda c: c.opted_out or c.dismissed_similar,
+        lambda c: c.is_business and (c.opted_out or c.dismissed_similar),
     ),
     Rationale(
         "similar_ignored",

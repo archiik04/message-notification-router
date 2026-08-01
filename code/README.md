@@ -12,8 +12,9 @@ with an independent safety engine that can veto any decision.
 | message_type accuracy | **100%** (30/30) |
 | joint accuracy | **100%** (30/30) |
 | safety-critical errors | **0** |
+| reason exact match vs reference | **30/30** |
 | evidence recall | 71% (measured ceiling, see below) |
-| mean absolute confidence error | 0.016 |
+| mean absolute confidence error | 0.010 |
 | runtime, 110 messages | ~2.5 s (warm media cache) |
 
 ---
@@ -302,7 +303,7 @@ miss, then encode the finding** — keeping inference deterministic, free, and r
 
 ### Confidence calibration
 
-Mean absolute error against reference confidence is **0.016**. Note that a standard ECE against
+Mean absolute error against reference confidence is **0.010**. Note that a standard ECE against
 observed accuracy reads ~0.15 here *because accuracy is 100% while the reference itself never exceeds
 0.91* — matching the reference is the correct target, and over-confident 0.99s would score worse.
 
