@@ -163,7 +163,11 @@ class Settings:
     multimodal: MultimodalConfig = field(default_factory=MultimodalConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
 
-    use_llm: bool = True
+    # Opt-in, not opt-out. Arbitration measured as a net negative on this
+    # dataset (100% -> 96.7% action accuracy), so the presence of an API key in
+    # the environment must not be able to silently change the output. Enabling
+    # it requires an explicit --use-llm flag.
+    use_llm: bool = False
     use_embeddings: bool = True
     workers: int = 4
     seed: int = 20260801

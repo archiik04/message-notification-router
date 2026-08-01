@@ -45,6 +45,8 @@ def build_settings(args: argparse.Namespace) -> Settings:
     settings = DEFAULT_SETTINGS
     if getattr(args, "dataset", None):
         settings = replace(settings, dataset_dir=Path(args.dataset).resolve())
+    if getattr(args, "use_llm", False):
+        settings = replace(settings, use_llm=True)
     if getattr(args, "no_llm", False):
         settings = replace(settings, use_llm=False)
     if getattr(args, "no_embeddings", False):
@@ -296,30 +298,43 @@ def cmd_ablate(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="sentinel", description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("-v", "--verbose", action="store_true")
-    parser.add_argument("--dataset", help="path to dataset directory")
-    parser.add_argument("--no-llm", action="store_true", help="force fully deterministic mode")
-    parser.add_argument("--no-embeddings", action="store_true", help="use lexical retrieval only")
+    # Global flags live on a parent parser so they are accepted both before and
+    # after the subcommand. Argparse otherwise rejects `run --use-llm`, which is
+    # the order anyone would naturally type.
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("-v", "--verbose", action="store_true")
+    common.add_argument("--dataset", help="path to dataset directory")
+    common.add_argument("--use-llm", action="store_true",
+                        help="opt in to LLM arbitration (needs OPENAI_API_KEY; measured as a "
+                             "net negative on this dataset, so it is off by default)")
+    common.add_argument("--no-llm", action="store_true",
+                        help="force fully deterministic mode (already the default)")
+    common.add_argument("--no-embeddings", action="store_true", help="use lexical retrieval only")
 
+    parser = argparse.ArgumentParser(prog="sentinel", description=__doc__, parents=[common],
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command")
 
-    p_run = sub.add_parser("run", help="route all messages and write output.csv")
+    p_run = sub.add_parser("run", parents=[common],
+                           help="route all messages and write output.csv")
     p_run.add_argument("-o", "--output", help="output CSV path")
     p_run.add_argument("--trace", action="store_true", help="also write per-decision JSONL traces")
     p_run.set_defaults(func=cmd_run)
 
-    sub.add_parser("eval", help="evaluate against labelled samples").set_defaults(func=cmd_eval)
+    sub.add_parser("eval", parents=[common],
+                   help="evaluate against labelled samples").set_defaults(func=cmd_eval)
 
-    p_explain = sub.add_parser("explain", help="print a full decision trace")
+    p_explain = sub.add_parser("explain", parents=[common], help="print a full decision trace")
     p_explain.add_argument("message_id")
     p_explain.set_defaults(func=cmd_explain)
 
-    sub.add_parser("media", help="rebuild and dump the media cache").set_defaults(func=cmd_media)
-    sub.add_parser("ablate", help="component ablation study").set_defaults(func=cmd_ablate)
+    sub.add_parser("media", parents=[common],
+                   help="rebuild and dump the media cache").set_defaults(func=cmd_media)
+    sub.add_parser("ablate", parents=[common],
+                   help="component ablation study").set_defaults(func=cmd_ablate)
 
-    p_verify = sub.add_parser("verify", help="end-to-end submission readiness check")
+    p_verify = sub.add_parser("verify", parents=[common],
+                              help="end-to-end submission readiness check")
     p_verify.add_argument("-o", "--output", help="output CSV path")
     p_verify.set_defaults(func=cmd_verify)
 

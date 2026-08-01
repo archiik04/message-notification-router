@@ -69,13 +69,16 @@ python -m pytest code/tests/test_grounding.py -q   # proof the media is actually
 ### Optional LLM layer — built, measured, and deliberately left off
 
 ```bash
-export OPENAI_API_KEY=...    # optional; OFF by default
-python code/main.py run
+python code/main.py run --use-llm    # needs OPENAI_API_KEY; opt-in only
 ```
 
+**Opt-in by design.** An API key sitting in the environment cannot enable this on its own — the
+explicit flag is required. Since arbitration measurably *lowers* accuracy, a stray env var must
+never be able to silently change a submission.
+
 When enabled, `gpt-4o-mini` arbitrates **only** the rows where the deterministic score sits next to a
-threshold (50 of 110). It cannot overrule the safety engine, cannot move a decision more than one
-step, and never writes the explanation text.
+threshold (50 of 110, about $0.01). It cannot overrule the safety engine, cannot move a decision
+more than one step, and never writes the explanation text.
 
 **We ran it live and it made the system worse**, so it ships disabled. See
 [The LLM experiment](#the-llm-experiment-measured-not-assumed) — this is a measured result, not a
