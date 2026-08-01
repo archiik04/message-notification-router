@@ -166,6 +166,7 @@ class NotificationRouter:
             sender_stats and sender_stats.seen >= 2 and sender_stats.affinity >= 0.5
         )
         ctx.forwarded_chain = message.forwarded_count >= 3
+        ctx.impersonation = "brand_impersonation" in safety.threats
         return ctx
 
     def _shares_group_type(self, message: Message, group_types: set[str]) -> bool:

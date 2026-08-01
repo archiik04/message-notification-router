@@ -179,7 +179,12 @@ class TypeClassifier:
         group = self.ds.groups.get(message.group_id) if message.group_id else None
         low = content.low
 
-        if content.greeting_hits and content.word_count < 45 and not content.has_direct_request:
+        # "Good morning beta, call me later when free, nothing urgent" is a
+        # greeting that happens to contain a verb. A request the sender has
+        # already waved off does not turn well-wishing into an action item.
+        if content.greeting_hits and content.word_count < 45 and (
+            not content.has_direct_request or content.deescalation_hits
+        ):
             return "greeting", ["greeting_language"]
 
         if message.forwarded_count >= 3 and (content.forward_hits or not content.has_direct_request):

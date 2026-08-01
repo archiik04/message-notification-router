@@ -80,6 +80,7 @@ class RationaleContext:
     payment_risk: bool = False
     interest_match: bool = False
     forwarded_chain: bool = False
+    impersonation: bool = False
 
     def has(self, driver: str) -> bool:
         return driver in self.drivers
@@ -140,6 +141,12 @@ BANK: tuple[Rationale, ...] = (
         "A legitimate payment reminder from a known account is close to its due date.",
         "notify", ("payment",), 0.87, 1, 82,
         lambda c: not c.payment_risk,
+    ),
+    Rationale(
+        "service_status_change",
+        "A service the user is currently using has changed status and needs checking now.",
+        "notify", ("business_update", "event"), 0.87, 1, 70,
+        lambda c: c.is_business and c.has_relationship,
     ),
     Rationale(
         "time_critical_generic",
@@ -227,6 +234,17 @@ BANK: tuple[Rationale, ...] = (
         "digest", ("forward",), 0.80, 1, 68,
     ),
     Rationale(
+        "unfamiliar_business_low_priority",
+        "The business message is safe but the user has no active relationship that makes it urgent.",
+        "digest", ("business_update", "promotion", "event", "payment"), 0.80, 1, 66,
+        lambda c: c.is_business,
+    ),
+    Rationale(
+        "scheduled_not_urgent",
+        "The message describes a scheduled item that the user can review later.",
+        "digest", ("event",), 0.82, 1, 64,
+    ),
+    Rationale(
         "digest_fallback",
         "The message is safe and useful, but it can wait for a later summary.",
         "digest", (), 0.80, 1, 10,
@@ -256,14 +274,24 @@ BANK: tuple[Rationale, ...] = (
         "mute", ("scam",), 0.87, 1, 97,
         lambda c: c.account_threat and c.support_framing,
     ),
+    # Requires genuine absence of history. Loosening this made it the most-used
+    # rationale in the whole run, and because it cites nothing by construction it
+    # was discarding usable evidence on 15% of rows.
     Rationale(
         "first_contact_sensitive_ask",
         "This is the first message from the sender and it asks for sensitive verification or payment.",
         "mute", ("scam",), 0.87, 1, 96,
-        lambda c: (c.credential_request or c.payment_risk)
+        lambda c: c.first_contact
+        and (c.credential_request or c.payment_risk)
         and not c.support_framing
         and not c.has_link,
         evidence_policy="none",
+    ),
+    Rationale(
+        "brand_impersonation",
+        "The sender is impersonating a known brand from an unofficial domain to look legitimate.",
+        "mute", ("scam",), 0.87, 1, 95,
+        lambda c: c.impersonation,
     ),
     Rationale(
         "fake_support_generic",
