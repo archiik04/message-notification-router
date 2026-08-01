@@ -80,9 +80,10 @@ When enabled, `gpt-4o-mini` arbitrates **only** the rows where the deterministic
 threshold (50 of 110, about $0.01). It cannot overrule the safety engine, cannot move a decision
 more than one step, and never writes the explanation text.
 
-**We ran it live and it made the system worse**, so it ships disabled. See
-[The LLM experiment](#the-llm-experiment-measured-not-assumed) — this is a measured result, not a
-default we never tested.
+**It ships disabled** — not because the model is bad, but because with correct inputs it agrees
+with the deterministic core on every measurable row while costing determinism. See
+[The LLM experiment](#the-llm-experiment-measured-not-assumed), including the measurement bug
+that made an earlier version of this README wrong.
 
 ---
 
@@ -284,18 +285,34 @@ built the layer, ran it against a real `gpt-4o-mini` endpoint on all 110 message
 | deterministic core | **100%** (30/30) | — |
 | + LLM arbitration | 96.7% (29/30) | 7 |
 
-**The LLM is a net negative, and the failure is systematic, not random.** Every remaining override
-pushed `notify → digest`, including:
+**First measurement said the LLM was a net negative.** Every override pushed `notify → digest`,
+including a doctor's appointment moved to 6 PM and a "tanker leaves in 15 mins" society alert the
+model justified as *"time-sensitive but can wait"*.
 
-- a doctor's appointment moved to 6 PM with "please confirm if you can leave by 5:15" — *"can wait for
-  later"*;
-- a society admin's "tanker leaves in 15 mins", where the model's own note read
-  *"time-sensitive but can wait for later review"* — self-contradictory on its face;
-- two delivery updates matching live orders, the same error that costs it the labelled row.
+**That conclusion was wrong, and the cause was my own bug.** The prompt described the engine's
+thresholds with a hardcoded string — `notify floor 0.62, mute ceiling 0.30` — written before those
+thresholds were tuned to 0.42 and 0.08. Every borderline row scores 0.43–0.46, so the model was told
+each one sat *below* the notify bar and correctly reasoned "digest". The systematic bias was
+information I fed it, not judgement it lacked.
 
-Reasoning from a summary, the model applies a generic "is this dramatic?" prior. The deterministic
-engine knows something it does not: whether *this* user has an order in flight with *this* business.
-That is exactly the personalisation the task is scored on.
+With thresholds read from live config (and the asymmetric cost of a miss stated explicitly):
+
+| configuration | sample action accuracy | overrides on 110 |
+|---|---|---|
+| deterministic core | **100%** | — |
+| + LLM, stale thresholds | 96.7% | 7, all `notify → digest` |
+| + LLM, corrected | **100%** | 5, four of them `digest → notify` |
+
+The direction of the bias inverted, which is the clearest evidence the threshold text was driving it.
+
+**So why is it still off?** Because on the 30 rows where ground truth exists, the corrected model now
+produces **zero overrides** — it agrees with the deterministic engine everywhere we can check. It
+makes 5 changes on unlabelled rows that cannot be verified either way. Adding network dependence,
+per-run variance and cost to buy no measurable accuracy is a bad trade, so the deterministic path
+ships. That is a different and more defensible reason than "the model is worse".
+
+The wider lesson is the one worth keeping: **a flawed experiment produced a confident, wrong
+conclusion that survived until someone asked why.**
 
 **Where the LLM did earn its keep was offline, as a gap finder.** Two of its early overrides were
 correct and exposed real holes in the safety lexicon:
@@ -368,7 +385,7 @@ cache hit rate, media coverage, safety interventions and critic repairs.
 | determinism | asserted by test: same input, identical output |
 
 The only paid path is the optional LLM layer, which is off by default and measured as
-a net negative anyway (see above). With it enabled the whole run costs roughly $0.01.
+off by default (see above). With it enabled the whole run costs roughly $0.01.
 
 ## Grounding: proof the system reads the media
 

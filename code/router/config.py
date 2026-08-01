@@ -163,10 +163,10 @@ class Settings:
     multimodal: MultimodalConfig = field(default_factory=MultimodalConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
 
-    # Opt-in, not opt-out. Arbitration measured as a net negative on this
-    # dataset (100% -> 96.7% action accuracy), so the presence of an API key in
-    # the environment must not be able to silently change the output. Enabling
-    # it requires an explicit --use-llm flag.
+    # Opt-in, not opt-out. With a corrected prompt the arbiter agrees with the
+    # deterministic core on every labelled row, so it buys no measurable accuracy
+    # while adding network dependence and per-run variance. An API key present in
+    # the environment must never be able to change a submission on its own.
     use_llm: bool = False
     use_embeddings: bool = True
     workers: int = 4

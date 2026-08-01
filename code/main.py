@@ -306,7 +306,7 @@ def main(argv: list[str] | None = None) -> int:
     common.add_argument("--dataset", help="path to dataset directory")
     common.add_argument("--use-llm", action="store_true",
                         help="opt in to LLM arbitration (needs OPENAI_API_KEY; measured as a "
-                             "net negative on this dataset, so it is off by default)")
+                             "agrees with the deterministic core, so it is off by default)")
     common.add_argument("--no-llm", action="store_true",
                         help="force fully deterministic mode (already the default)")
     common.add_argument("--no-embeddings", action="store_true", help="use lexical retrieval only")

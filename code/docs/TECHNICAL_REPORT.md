@@ -165,14 +165,20 @@ Built, run live against `gpt-4o-mini`, and measured.
 | configuration | sample action accuracy | overrides on 110 |
 |---|---|---|
 | deterministic core | **100%** | — |
-| + LLM arbitration | 96.7% | 7 |
+| + LLM, stale thresholds | 96.7% | 7, all `notify → digest` |
+| + LLM, corrected prompt | **100%** | 5, four of them `digest → notify` |
 
-**Net negative, and systematically so.** Every remaining override pushed
-`notify → digest`, including a doctor's appointment moved to 6 PM with "please confirm",
-and a "tanker leaves in 15 mins" alert the model justified as *"time-sensitive but can
-wait"*. Reasoning from a summary, it applies a generic "is this dramatic?" prior; the
-deterministic engine knows whether *this* user has an order in flight with *this*
-business.
+**The first measurement was wrong, and the cause was a bug in my own prompt.** The
+facts block described the engine's thresholds with a hardcoded string —
+`notify floor 0.62, mute ceiling 0.30` — written before they were tuned to 0.42 and
+0.08. Borderline rows score 0.43–0.46, so the model was told every one sat below the
+notify bar and reasoned accordingly. Sourcing thresholds from live config inverted the
+direction of the bias, which is the clearest possible evidence of what caused it.
+
+**Corrected, the model agrees with the deterministic engine on every labelled row**
+(zero overrides on the 30 samples). It still makes 5 changes on unlabelled rows that
+cannot be verified. Buying no measurable accuracy at the price of network dependence,
+per-run variance and cost is a bad trade, so the deterministic path ships.
 
 **Where it earned its keep was offline, as a gap finder.** Two early overrides were
 correct and exposed real holes — `reactivation fee` was absent from the payment
@@ -190,7 +196,8 @@ Kept deliberately, because they are the honest part of the record.
 |---|---|---|---|
 | penalise near-duplicate evidence | better recall | 71% → 55% | discarded |
 | force multi-citation onto one counterparty | more coherent | recall dropped; reference cites across senders | discarded |
-| LLM arbitration adds judgement | higher accuracy | 100% → 96.7% | disabled by default |
+| LLM arbitration adds judgement | higher accuracy | 100% → 100%, zero overrides once the prompt bug was fixed | off by default: no measurable gain, loses determinism |
+| *(my own)* LLM is a net negative | held for a day | caused by a stale hardcoded threshold in my prompt | conclusion retracted and documented |
 | loosening first-contact to match reason strings | better reason score | became most-used reason, cited no evidence on 15% of rows | reverted |
 
 The last one is the most instructive: optimising a proxy (exact string match on 30
