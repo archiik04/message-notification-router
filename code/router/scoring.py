@@ -76,6 +76,12 @@ class UrgencyEngine:
             urgency += min(0.34, 0.16 * explicit)
             drivers.append("explicit_urgency_language")
 
+        if content.semantic_intent == "urgent":
+            urgency += 0.34 + min(0.16, content.semantic_margin)
+            drivers.append("multilingual_urgency_similarity")
+        elif content.semantic_intent in ("promotion", "benign"):
+            urgency -= 0.10
+
         if content.translit_urgency_hits:
             urgency += min(0.24, 0.12 * len(content.translit_urgency_hits))
             drivers.append("transliterated_urgency")

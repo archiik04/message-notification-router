@@ -1,7 +1,7 @@
 message_id,action,message_type,reason,confidence,evidence_message_ids
 msg_023,notify,business_update,A service the user is currently using has changed status and needs checking now.,0.86,message_0243
 msg_091,mute,scam,The message uses fake support language and account-blocking pressure to push the user into action.,0.87,message_0238
-msg_090,digest,unknown,"The sender is unfamiliar, but the message does not show urgency, payment pressure, or safety risk.",0.83,none
+msg_090,digest,unknown,"The sender is unfamiliar, but the message does not show urgency, payment pressure, or safety risk.",0.81,none
 msg_048,mute,scam,The message uses fake support language and account-blocking pressure to push the user into action.,0.87,message_0151
 msg_040,mute,greeting,The sender has a pattern of repeated forwards or greetings that the user usually ignores.,0.84,message_0136;message_0135
 msg_075,notify,business_update,A service the user is currently using has changed status and needs checking now.,0.87,message_0206

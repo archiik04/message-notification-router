@@ -160,6 +160,14 @@ class SafetyEngine:
             threats.append("investment_fraud")
             v.signals["investment"] = bump
 
+        # ---- Cross-lingual fallback ------------------------------------
+        # Only populated when the lexicons could not read the text at all.
+        if content.semantic_intent == "fraud":
+            bump = 0.58 + min(0.14, content.semantic_margin)
+            scam += bump
+            threats.append("multilingual_fraud_similarity")
+            v.signals["semantic_fraud"] = round(bump, 3)
+
         # ---- Link and QR risk ------------------------------------------
         link_risk, link_threats = self._link_risk(content, biz)
         scam += link_risk

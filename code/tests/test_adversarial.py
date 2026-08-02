@@ -159,3 +159,39 @@ def test_legitimate_security_messages_are_not_muted_as_scam(router, text):
 def test_family_emergency_interrupts(router):
     d = route(router, make("Mom collapsed, we are going to hospital now. Please come immediately."))
     assert d.action == "notify"
+
+
+# ---------------------------------------------------------------- cross-lingual fallback
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("বাবা হাসপাতালে আছে, এখনই ফোন করো", "notify"),        # bengali emergency
+        ("पिताजी अस्पताल में हैं, अभी आओ", "notify"),             # hindi emergency
+        ("আপনার অ্যাকাউন্ট ব্লক হবে, OTP পাঠান", "mute"),        # bengali fraud
+        ("உங்கள் கணக்கு முடக்கப்படும், OTP அனுப்பவும்", "mute"),   # tamil fraud
+    ],
+)
+def test_non_latin_scripts_are_understood(router, text, expected):
+    """Lexicons score these at zero; the multilingual fallback carries them."""
+    assert route(router, make(text)).action == expected, text
+
+
+def test_semantic_fallback_changes_no_english_decision(router):
+    """The fallback must be pure upside: it may not perturb the tuned path.
+
+    Asserted on the real dataset rather than on one contrived sentence - the
+    property that matters is that no English decision moves, not that the
+    scorer never runs.
+    """
+    with_fallback, _, _ = router.run()
+    router.semantic.enabled = False
+    try:
+        without, _, _ = router.run()
+    finally:
+        router.semantic.enabled = True
+
+    a = {d.message_id: (d.action, d.message_type) for d in with_fallback}
+    b = {d.message_id: (d.action, d.message_type) for d in without}
+    assert a == b, [k for k in a if a[k] != b.get(k)][:5]

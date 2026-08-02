@@ -4,7 +4,8 @@ pillow>=10.0
 opencv-python-headless>=4.9
 pytesseract>=0.3.10          # needs the tesseract binary on PATH (see README)
 faster-whisper>=1.0          # local speech-to-text, no API key
-sentence-transformers>=3.0   # history embeddings + CLIP scene tagging
+sentence-transformers>=3.0   # history embeddings, CLIP scene tags,
+                             # and the multilingual intent fallback
 
 # Robustness: the dataset ships an AVIF file named .jpg
 pillow-avif-plugin>=1.4

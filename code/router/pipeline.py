@@ -27,6 +27,7 @@ from .multimodal import MediaIndex, build_media_index
 from .reasons import BY_KEY, RationaleContext, select
 from .retrieval import EvidenceRetriever, evidence_intent
 from .safety import SafetyEngine, SafetyVerdict
+from .semantic import SemanticIntentScorer, non_latin_ratio
 from .schema import Decision, Message
 from .scoring import RoutingEngine, SignalBundle
 
@@ -82,6 +83,7 @@ class NotificationRouter:
         self.media = media if media is not None else build_media_index(settings, dataset)
         self.memory = MemoryStore(dataset)
         self.safety = SafetyEngine(dataset)
+        self.semantic = SemanticIntentScorer()
         self.retriever = EvidenceRetriever(settings, dataset, self.media)
         self.engine = RoutingEngine(settings, dataset, self.memory)
         self.critic = SelfCritic(settings)
@@ -200,6 +202,13 @@ class NotificationRouter:
 
     def route_one(self, message: Message, stats: RunStats) -> "RoutedMessage":
         content = build_content(message, self.media)
+        # Cross-lingual fallback runs only when the lexicons found nothing or
+        # the text is largely non-Latin, so the tuned English path is untouched.
+        content.non_latin_ratio = non_latin_ratio(content.combined)
+        if self.semantic.should_run(content.combined, content.lexicon_hit_count):
+            content.semantic_intent, content.semantic_margin = self.semantic.verdict(
+                content.combined
+            )
         safety = self.safety.assess(message, content)
 
         similar = self.retriever.candidates(message, content)

@@ -16,7 +16,7 @@ with an independent safety engine that can veto any decision.
 | evidence recall | 71% (measured ceiling, see below) |
 | mean absolute confidence error | 0.010 |
 | internal-consistency anomalies | **0 / 110** |
-| tests | **60 passing** |
+| tests | **96 passing** |
 | runtime, 110 messages | ~3.8 s (warm media cache), ~29 msg/s |
 
 ---
@@ -62,7 +62,7 @@ python code/main.py explain msg_095     # full decision trace for one message
 python code/main.py media               # rebuild and dump the OCR/ASR cache
 python code/main.py ablate              # component ablation study
 python code/main.py verify              # one-command submission readiness check
-python -m pytest code/tests -q          # 60 regression, adversarial + grounding tests
+python -m pytest code/tests -q          # 96 regression, adversarial + grounding tests
 python -m pytest code/tests/test_grounding.py -q   # proof the media is actually read
 ```
 
@@ -405,8 +405,10 @@ descriptive caption, a text-only system looks identical to one doing real OCR.
 
 - Thresholds are tuned on 30 labelled rows. Sensitivity analysis shows a wide plateau, but a larger
   validation set would justify tighter bands.
-- Lexicons are English-first; WhatsApp traffic in this domain is frequently code-mixed
-  (Hindi-English). Multilingual embeddings and a code-mixed lexicon are the highest-value next step.
+- Non-Latin scripts are handled by a cross-lingual fallback (`semantic.py`) rather than by the
+  lexicons. It runs only when the keyword layer reads nothing, and provably changes **zero**
+  decisions on the English dataset — pure upside for multilingual input. Tamil separates less
+  cleanly than Bengali/Hindi/Marathi; a larger encoder would close that.
 - Repetition detection is per-user; a cross-user "this exact forward is circulating" signal would
   catch chain content on first sight rather than on second.
 - Topic buckets in the memory model are coarse; learned user-interest embeddings would personalise

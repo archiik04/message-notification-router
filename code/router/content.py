@@ -425,6 +425,10 @@ class ContentView:
     translit_risk_hits: list[str] = field(default_factory=list)
     translit_urgency_hits: list[str] = field(default_factory=list)
     demands_amount: bool = False
+    lexicon_hit_count: int = 0
+    semantic_intent: str = ""      # cross-lingual fallback verdict
+    semantic_margin: float = 0.0
+    non_latin_ratio: float = 0.0
     feedback_hits: list[str] = field(default_factory=list)
     caption_marketplace_hits: list[str] = field(default_factory=list)
     caption_promo_hits: list[str] = field(default_factory=list)
@@ -556,6 +560,12 @@ def build_content(message: Message, media: MediaIndex) -> ContentView:
     cv.has_direct_request = bool(DIRECT_REQUEST_RE.search(cv.combined))
     cv.has_question = bool(QUESTION_RE.search(cv.combined))
     cv.has_opt_out_footer = bool(OPT_OUT_RE.search(cv.combined))
+    cv.lexicon_hit_count = sum(len(x) for x in (
+        cv.credential_hits, cv.account_threat_hits, cv.payment_demand_hits, cv.prize_hits,
+        cv.investment_hits, cv.urgency_hits, cv.promo_hits, cv.greeting_hits,
+        cv.event_hits, cv.payment_hits, cv.business_update_hits, cv.translit_risk_hits,
+        cv.translit_urgency_hits, cv.time_pressure_hits,
+    ))
     cv.suspicious_url = any(d.endswith(SUSPICIOUS_TLDS) for d in cv.domains)
     cv.shortened_url = any(s in d for d in cv.domains for s in URL_SHORTENERS)
     return cv
